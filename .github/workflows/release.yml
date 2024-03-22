@@ -1,0 +1,73 @@
+name: Release Conda Packages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # For now just build a subset and see how upstreaming goes.
+          - os: macos-13
+            config: osx_64_build_variantosmesapython3.11.____cpython
+          - os: macos-14
+            config: osx_arm64_build_variantosmesapython3.11.____cpython
+          - os: ubuntu-22.04
+            config: linux_64_build_variantosmesapython3.11.____cpython
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: conda-build
+        run: python build-locally.py ${{ matrix.config }}
+        shell: bash
+        env:
+          OSX_SDK_DIR: ${{ github.workspace }}/SDKs
+
+      - name: upload-packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.os }}
+          path: miniforge3/conda-bld/
+
+  pages:
+    needs: [build]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mamba-org/setup-micromamba@v1
+        with:
+          generate-run-shell: true
+          environment-file: conda-recipe/conda-lock.yml
+          environment-name: conda-build
+          cache-environment: true
+
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: conda/
+          merge-multiple: true
+
+      - name: prepare package
+        run: micromamba run -n conda-build conda index conda/
+
+      - name: update pages
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Update to latest upstream"
+          git push -u origin -f gh-pages

@@ -1,0 +1,41 @@
+From 457dcf439f039675b8c1741ab320380d50c9b4c2 Mon Sep 17 00:00:00 2001
+From: Anuraag Agrawal <anuraaga@gmail.com>
+Date: Fri, 22 Mar 2024 12:24:26 +0900
+Subject: [PATCH] Define APIENTRY in osmesa build if not defined.
+
+glew.h undefines APIENTRY and also prevents gl.h from being included
+by defining its include guard. This means that APIENTRY is not defined
+within osmesa.h which usually relies on gl.h to define it.
+
+If APIENTRY is not defined when importing osmesa.h, we define it
+temporarily and then undefine when done. This is similar to the existing
+workaround for GLAPI which likely exists for the same reason as above.
+It seems that only clang fails to compile when APIENTRY is not defined,
+but it seems like it should be defined regardless of compiler.
+---
+ ThirdParty/glew/vtkglew/src/glew.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/ThirdParty/glew/vtkglew/src/glew.c b/ThirdParty/glew/vtkglew/src/glew.c
+index 824422c1..e7780f6a 100644
+--- a/ThirdParty/glew/vtkglew/src/glew.c
++++ b/ThirdParty/glew/vtkglew/src/glew.c
+@@ -38,7 +38,15 @@
+ 
+ #if defined(GLEW_OSMESA)
+ #  define GLAPI extern
++#  ifndef APIENTRY
++#    define APIENTRY
++#    define VTK_APIENTRY_DEFINED
++#  endif
+ #  include <GL/osmesa.h>
++#  ifdef VTK_APIENTRY_DEFINED
++#    undef APIENTRY
++#    undef VTK_APIENTRY_DEFINED
++#  endif
+ #elif defined(GLEW_EGL)
+ #  include <GL/eglew.h>
+ #elif defined(_WIN32)
+-- 
+2.44.0
+
